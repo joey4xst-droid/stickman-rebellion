@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stickman: Infinite Rebellion</title>
+    <style>
+        body {
+            margin: 0; padding: 0;
+            background: #09090e; color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            height: 100vh; overflow: hidden;
+            user-select: none;
+        }
+        #game-container {
+            position: relative;
+            border: 4px solid #3b82f6;
+            box-shadow: 0 0 25px rgba(59, 130, 246, 0.4);
+        }
+        canvas { background: #0f172a; display: block; }
+        
+        /* UI Screens overlays */
+        .menu-screen {
+            position: absolute; top: 0; left: 0;
+            width: 800px; height: 450px;
+            background: rgba(10, 10, 18, 0.95);
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 10;
+        }
+        .btn {
+            background: #2563eb; color: white;
+            border: none; padding: 10px 25px;
+            margin: 8px; font-size: 16px; font-weight: bold;
+            font-family: 'Courier New'; cursor: pointer;
+            border-bottom: 4px solid #1d4ed8;
+            border-radius: 4px;
+        }
+        .btn:hover { background: #3b82f6; }
+        .btn:active { border-bottom: 0; margin-top: 12px; margin-bottom: 4px; }
+        
+        #hud-story {
+            position: absolute; top: 12px; left: 12px; right: 12px;
+            background: rgba(0, 0, 0, 0.85); border-left: 5px solid #3b82f6;
+            padding: 10px; font-size: 13px; pointer-events: none; display: none;
+        }
+        .custom-row { display: flex; gap: 15px; margin-bottom: 10px; }
+        .color-box { width: 30px; height: 30px; border: 2px solid #fff; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <!-- STORY BANNER -->
+    <div id="hud-story"><b>[SITUATION]:</b> Chaos erupts! Minions are invading!</div>
+
+    <!-- MAIN MENU SCREEN -->
+    <div id="main-menu" class="menu-screen">
+        <h1 style="color: #3b82f6; font-size: 42px; margin-bottom: 5px; text-shadow: 3px 3px #000;">STICKMAN: REBELLION</h1>
+        <p style="color: #64748b; margin-top: 0;">Endless Brawler & Hazard Platformer</p>
+        <button class="btn" onclick="changeMode('campaign')">START ENDLESS CAMPAIGN</button>
+        <button class="btn" style="background:#16a34a; border-color:#15803d;" onclick="changeMode('parkour')">PARKOUR TRAINING ROOM</button>
+        <button class="btn" style="background:#8b5cf6; border-color:#6d28d9;" onclick="openScreen('custom-menu')">CUSTOMIZE CHARACTER</button>
+        <button class="btn" style="background:#ea580c; border-color:#c2410c;" onclick="openScreen('shop-menu')">GUN SHOP</button>
+    </div>
+
+    <!-- CUSTOMIZATION MENU -->
+    <div id="custom-menu" class="menu-screen" style="display: none;">
+        <h2>CHARACTER APPAREL LAB</h2>
+        <div class="custom-row">
+            <span>Body Style:</span>
+            <div class="color-box" style="background: #ffffff;" onclick="setCustom('color', '#ffffff')"></div>
+            <div class="color-box" style="background: #3b82f6;" onclick="setCustom('color', '#3b82f6')"></div>
+            <div class="color-box" style="background: #eab308;" onclick="setCustom('color', '#eab308')"></div>
+            <div class="color-box" style="background: #ec4899;" onclick="setCustom('color', '#ec4899')"></div>
+        </div>
+        <div class="custom-row">
+            <span>Facial Mask:</span>
+            <button class="btn" onclick="setCustom('mask', 'none')">None</button>
+            <button class="btn" onclick="setCustom('mask', 'ninja')">Ninja Mask</button>
+            <button class="btn" onclick="setCustom('mask', 'visor')">Cyber Visor</button>
+        </div>
+        <div class="custom-row">
+            <span>Neck Scarf:</span>
+            <button class="btn" onclick="setCustom('scarf', 'none')">None</button>
+            <button class="btn" onclick="setCustom('scarf', 'red')">Crimson Scarf</button>
+            <button class="btn" onclick="setCustom('scarf', 'green')">Rebel Green</button>
+        </div>
+        <button class="btn" style="background:#64748b; border-color:#475569;" onclick="openScreen('main-menu')">BACK TO HEADQUARTERS</button>
+    </div>
+
+    <!-- GUN SHOP MENU -->
+    <div id="shop-menu" class="menu-screen" style="display: none;">
+        <h2>NEON BLACK-MARKET GUN SHOP</h2>
+        <p>Your Wealth: <span id="shop-cash" style="color:#eab308; font-weight:bold;">0</span> Coins</p>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:15px;">
+            <button class="btn" onclick="buyWeapon('Uzi', 15, 35)">Buy Uzi (15 Coins)</button>
+            <button class="btn" onclick="buyWeapon('Shotgun', 25, 12)">Buy Shotgun (25 Coins)</button>
+            <button class="btn" onclick="buyWeapon('Laser Rifle', 40, 20)">Laser Blaster (40 Coins)</button>
+            <button class="btn" onclick="buyWeapon('Medkit', 10, 0)">Buy Medkit (10 Coins)</button>
+        </div>
+        <button class="btn" style="background:#64748b; border-color:#475569;" onclick="openScreen('main-menu')">BACK TO HEADQUARTERS</button>
+    </div>
+
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+</div>
+
+<!-- Link your procedural synthesizer sound file -->
+<script src="audio.js"></script>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const storyHUD = document.getElementById('hud-story');
+
+// Game Flow States
+let currentMode = 'menu'; // menu, campaign, parkour
+let currentLevel = 1;
+let globalCoins = 50; // Starts with 50 coins so you can buy items immediately!
+let gameTime = 0;
+let cameraX = 0;
+
+// Customization Cosmetics Options
+const config = {
+    color: '#ffffff',
+    mask: 'none',
+    scarf: 'none'
+};
+
+// Controls Engine
+const keys = {};
+window.addEventListener('keydown', e => {
+    keys[e.key] = true;
+    if(e.key === 'r' || e.key === 'R') { if(player.health <= 0) resetGame(); }
+});
+window.addEventListener('keyup', e => keys[e.key] = false);
+
+// Player Object
+const player = {
+    x: 100, y: 300, width: 22, height: 50,
+    vx: 0, vy: 0, speed: 5.5, jumpForce: 12.5,
+    grounded: false, health: 100, maxHealth: 100,
+    weapon: 'Fists', ammo: 0, facing: 'right',
+    isAttacking: false, attackTimer: 0
+};
+
+// Dynamic entities arrays
+let platforms = [];
+let hazards = []; // Spikes, Lava, Acid pits
+let npcs = [];    // Cops, Civilians running away
+let enemies = []; // Minions, Giant Bosses
+let bullets = [];
+let lootCoins = [];
+
+// Handle UI Windows Transitions
+function openScreen(screenId) {
+    document.getElementById('shop-cash').innerText = globalCoins;
+    document.querySelectorAll('.menu-screen').forEach(s => s.style.display = 'none');
+    document.getElementById(screenId).style.display = 'flex';
+    currentMode = 'menu';
+    storyHUD.style.display = 'none';
+}
+
+function setCustom(type, val) {
+    config[type] = val;
+    AudioEngine.play('coin');
+}
+
+function buyWeapon(name, cost, ammoQty) {
+    if (globalCoins >= cost) {
+        globalCoins -= cost;
+        document.getElementById('shop-cash').innerText = globalCoins;
+        AudioEngine.play('coin');
+        if (name === 'Medkit') {
+            player.health = Math.min(player.maxHealth, player.health + 50);
+        } else {
+            player.weapon = name;
+            player.ammo = ammoQty;
+        }
+    } else {
+        AudioEngine.play('hurt');
+    }
+}
+
+// Generate Procedural Endless Levels
+function buildLevel(levelNum, isParkourRoom = false) {
+    platforms = []; hazards = []; npcs = []; enemies = []; bullets = []; lootCoins = [];
+    cameraX = 0;
+    player.x = 100; player.y = 200; player.vx = 0; player.vy = 0;
+    
+    storyHUD.style.display = 'block';
+
+    if (isParkourRoom) {
+        storyHUD.innerHTML = `<b>[PARKOUR ZONE]:</b> Practice jumps, wall leaps, and avoid test hazards! Press 'H' anytime to return Home.`;
+        // Level Design for Parkour Training Area
+        platforms.push({ x: 0, y: 400, width: 600, height: 50, type: 'ground' });
+        platforms.push({ x: 700, y: 330, width: 100, height: 15 });
+        platforms.push({ x: 900, y: 260, width: 80, height: 15 });
+        platforms.push({ x: 1100, y: 190, width: 60, height: 15 });
+        platforms.push({ x: 1300, y: 250, width: 250, height: 15 });
+        // Practice Hazards
+        hazards.push({ x: 600, y: 420, width: 100, height: 30, type: 'lava' });
+        hazards.push({ x: 1350, y: 240, width: 60, height: 10, type: 'spikes' });
+        return;
+    }
+
+    // --- CAMPAIGN MODE ENGINE GENERATOR ---
+    storyHUD.innerHTML = `<b>[SECTOR ${levelNum}]:</b> Help the Cops push back minions! Giant Boss awaits at the sector border!`;
+    
+    let currentX = 0;
+    // Generate linear path chunk variables based on difficulty multiplier
+    let totalLength = 2200 + (levelNum * 300);
+    
+    // Safety spawn zone platform
+    platforms.push({ x: 0, y: 400, width: 450, height: 50, type: 'ground' });
+    currentX = 450;
+
+    // Build the structural world blocks
+    while (currentX < totalLength - 600) {
+        let blockType = Math.random();
+        if (blockType < 0.4) {
+            // Normal solid stretch
+            let w = 200 + Math.random() * 150;
+            platforms.push({ x: currentX, y: 400, width: w, height: 50 });
+            
+            // Randomly pop safety response forces (Cops) or fleeing civs
+            if (Math.random() < 0.3) {
+                npcs.push({ x: currentX + 50, y: 350, type: 'cop', shootCooldown: 0 });
+            } else if (Math.random() < 0.4) {
+                npcs.push({ x: currentX + 70, y: 350, type: 'civilian', speed: 2.5, alive: true });
+                enemies.push({ x: currentX + 180, y: 350, type: 'minion', vx: -2.5, health: 20 });
+            }
+            currentX += w;
+        } 
+        else if (blockType < 0.75) {
+            // Pit Trap filled with Dangerous Elements
+            let gap = 90 + (Math.random() * 50) + Math.min(50, levelNum * 5);
+            let hazardType = Math.random() < 0.5 ? 'acid' : 'lava';
+            hazards.push({ x: currentX, y: 415, width: gap, height: 35, type: hazardType });
+            currentX += gap;
+        } 
+        else {
+            // Elevated High Risers & Roof platform paths
+            let platW = 120 + Math.random() * 100;
+            let platY = 260 + Math.random() * 60;
+            platforms.push({ x: currentX, y: platY, width: platW, height: 15 });
+            
+            // Put spike obstacles on some elevated tracks
+            if (Math.random() < 0.5) {
+                hazards.push({ x: currentX + (platW/2) - 15, y: platY - 10, width: 30, height: 10, type: 'spikes' });
+            }
+            // Put minions on roofs
+            if (Math.random() < 0.6) {
+                enemies.push({ x: currentX + 20, y: platY - 50, type: 'minion', vx: -2, health: 15 + (levelNum*2) });
+            }
+            
+            // Ground support strip line below them
+            platforms.push({ x: currentX, y: 400, width: platW, height: 50 });
+            currentX += platW;
+        }
+    }
+
+    // Boss Arena Base Platform Chunks
+    let bossArenaX = totalLength - 650;
+    platforms.push({ x: bossArenaX, y: 400, width: 800, height: 50 });
+    
+    // Boss Room Hazard Elements (Spikes & Acid Pools inside the Arena)
+    hazards.push({ x: bossArenaX + 150, y: 385, width: 40, height: 15, type: 'spikes' });
+    hazards.push({ x: bossArenaX + 350, y: 415, width: 100, height: 35, type: 'acid' });
+
+    // Spawn the GIANT STICKMAN BOSS
+    let bossSizeFactor = 1.3 + (levelNum * 0.15); // Scale gets bigger every level!
+    enemies.push({
+        x: bossArenaX + 500, y: 400 - (75 * bossSizeFactor),
+        width: 30 * bossSizeFactor, height: 75 * bossSizeFactor,
+        type: 'boss', health: 150 + (levelNum * 60), maxHealth: 150 + (levelNum * 60),
+        vx: -(1.5 + (levelNum * 0.2)), cooldown: 0, factor: bossSizeFactor
+    });
+}
+
+function changeMode(mode) {
+    document.querySelectorAll('.menu-screen').forEach(s => s.style.display = 'none');
+    currentMode = mode;
+    if (mode === 'campaign') {
+        currentLevel = 1;
+        buildLevel(currentLevel, false);
+    } else if (mode === 'parkour') {
+        buildLevel(0, true);
+    }
+}
+
+// Global Core Loops Processing Engine
+function update() {
+    if (currentMode === 'menu') return;
+    gameTime++;
+
+    // Check Home Command shortcut button
+    if (keys['h'] || keys['H']) {
+        openScreen('main-menu');
+        return;
+    }
+
+    // --- PLAYER MOVEMENT PHYS ENGINE ---
+    if (keys['a'] || keys['ArrowLeft']) {
+        player.vx = -player.speed; player.facing = 'left';
+    } else if (keys['d'] || keys['ArrowRight']) {
+        player.vx = player.speed; player.facing = 'right';
+    } else {
+        player.vx *= 0.75;
+    }
+
+    if ((keys['w'] || keys['ArrowUp']) && player.grounded) {
+        player.vy = -player.jumpForce;
+        player.grounded = false;
+        AudioEngine.play('jump');
+    }
+
+    player.vy += 0.65; // Gravity pull
+    player.x += player.vx;
+    player.y += player.vy;
+
+    // Level Platform Bounds Collisions Check Loop
+    player.grounded = false;
+    platforms.forEach(p => {
+        if (player.x < p.x + p.width && player.x + player.width > p.x &&
+            player.y + player.height > p.y && player.y + player.height - player.vy <= p.y + 12) {
+            player.y = p.y - player.height;
+            player.vy = 0;
+            player.grounded = true;
+        }
+    });
+
+    // --- DAMAGE HAZARD CHECKS (Spikes, Lava, Acid) ---
+    hazards.forEach(h => {
+        if (player.x < h.x + h.width && player.x + player.width > h.x &&
+            player.y + player.height > h.y + 5) {
+            // Hit! Apply damage ticker response based on danger core type
+            let dmg = h.type === 'lava' ? 2.5 : h.type === 'acid' ? 1.5 : 20;
+            player.health -= dmg;
+            player.vy = -6; // Knock bounce animation
+            AudioEngine.play('hurt');
+        }
+    });
+
+    // --- COMBAT ACTIONS PROCESS ---
+    if (keys[' '] && !player.isAttacking) {
+        player.isAttacking = true;
+        player.attackTimer = 12;
+
+        if (player.weapon !== 'Fists' && player.ammo > 0) {
+            AudioEngine.play('laser');
+            bullets.push({
+                x: player.facing === 'right' ? player.x + player.width : player.x,
+                y: player.y + 18,
+                vx: player.facing === 'right' ? 14 : -14,
+                byPlayer: true, damage: player.weapon === 'Shotgun' ? 35 : 18
+            });
+            player.ammo--;
+            if(player.ammo <= 0) player.weapon = 'Fists';
+        } else {
+            // Execute Melee strike impact field arc
+            AudioEngine.play('punch');
+            enemies.forEach(e => {
+                if (Math.abs((player.x + player.width/2) - (e.x + e.width/2)) < 65 && Math.abs(player.y - e.y) < 50) {
+                    e.health -= 15;
+                    e.x += player.facing === 'right' ? 15 : -15; // Knockback effect
+                }
+            });
+        }
+    }
+    if (player.isAttacking) {
+        player.attackTimer--;
+        if(player.attackTimer <= 0) player.isAttacking = false;
+    }
+
+    // --- ALLY INTEGRATION LOGIC (Cops & Civilians) ---
+    npcs.forEach((npc, nIdx) => {
+        if (npc.type === 'civilian') {
+            if (!npc.alive) return;
+            npc.x += npc.speed; // Terrified flight movement track
+            
+            // Check if minion intercepts poor civilian
+            enemies.forEach(e => {
+                if (Math.abs(npc.x - e.x) < 30) {
+                    npc.alive = false;
+                    AudioEngine.play('explosion'); // Death impact indicator sound
+                }
+            });
+        } 
+        else if (npc.type === 'cop') {
+            npc.shootCooldown++;
+            // Lock and engage targets automatically
+            let target = null;
+            enemies.forEach(e => { if(e.x > npc.x && e.x - npc.x < 400) target = e; });
+            
+            if (target && npc.shootCooldown > 50) {
+                AudioEngine.play('laser');
+                bullets.push({ x: npc.x + 20, y: npc.y + 18, vx: 9, byPlayer: true, damage: 10 });
+                npc.shootCooldown = 0;
+            }
+        }
+    });
+
+    // --- PROJECTILES LOGIC SIMULATION ---
+    bullets.forEach((b, bIdx) => {
+        b.x += b.vx;
+        if (b.byPlayer) {
+            enemies.forEach(e => {
+                if (b.x > e.x && b.x < e.x + e.width && b.y > e.y && b.y < e.y + e.height) {
+                    e.health -= b.damage;
+                    bullets.splice(bIdx, 1);
+                }
+            });
+        } else {
+            // Enemy projectiles hitting player
+            if (b.x > player.x && b.x < player.x + player.width && b.y > player.y && b.y < player.y + player.height) {
+                player.health -= 12;
+                AudioEngine.play('hurt');
+                bullets.splice(bIdx, 1);
+            }
+        }
+    });
+
+    // --- ENEMY THREAT MATRIX SYSTEM ---
+    enemies.forEach((e, eIdx) => {
+        if (e.health <= 0) {
+            AudioEngine.play('explosion');
+            // Drop bounty rewards structure
+            lootCoins.push({ x: e.x, y: e.y + 20, value: e.type === 'boss' ? 50 : 5 });
+            
+            if (e.type === 'boss') {
+                currentLevel++;
+                storyHUD.innerHTML = `<h1>🏆 SECTOR VICTORY! 🏆</h1>Advancing to Sector ${currentLevel}... Get ready!`;
+                setTimeout(() => { buildLevel(currentLevel, false); }, 2500);
+            }
+            enemies.splice(eIdx, 1);
+            return;
+        }
+
+        if (e.type === 'minion') {
+            e.x += e.vx;
+            // Reverse at platform borders
+            if(Math.random() < 0.01) e.vx *= -1;
+            
+            // Contact damage collision loop
+            if (Math.abs((player.x + player.width/2) - (e.x + e.width/2)) < 25 && Math.abs(player.y - e.y) < 40) {
+                player.health -= 0.6;
+            }
+        } 
+        else if (e.type === 'boss') {
+            e.cooldown++;
+            // Boss AI combat movement engine loop targeting
+            if (player.x < e.x) e.x += e.vx;
+            else e.x -= e.vx;
+
+            // Attack Phase Pattern: Hard Range Shoot bursts
+            if (e.cooldown > Math.max(30, 90 - currentLevel * 5)) { 
+                bullets.push({ x: e.x, y: e.y + 30, vx: -10, byPlayer: false });
+                if(currentLevel > 2) { // Extra burst shot modifier on higher levels!
+                    setTimeout(() => { bullets.push({ x: e.x, y: e.y + 45, vx: -11, byPlayer: false }); }, 150);
+                }
+                e.cooldown = 0;
+            }
+        }
+    });
+
+    // --- LOOT COLLECTION SYSTEM ---
+    lootCoins.forEach((c, cIdx) => {
+        if (Math.abs(player.x - c.x) < 40 && Math.abs(player.y - c.y) < 40) {
+            globalCoins += c.value;
+            AudioEngine.play('coin');
+            lootCoins.splice(cIdx, 1);
+        }
+    });
+
+    // Smooth dynamic camera positioning tracking core
+    cameraX = player.x - canvas.width / 4;
+    if (cameraX < 0) cameraX = 0;
+}
+
+// Rendering Matrix Layer
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // DRAW DYNAMIC MOVING BACKGROUND GRID
+    let bgOffset = -(cameraX * 0.3) % 40;
+    ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 1;
+    for (let x = bgOffset; x < canvas.width; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+
+    ctx.save();
+    ctx.translate(-cameraX, 0);
+
+    // Draw Platforms
+    platforms.forEach(p => {
+        ctx.fillStyle = '#1e293b'; ctx.fillRect(p.x, p.y, p.width, p.height);
+        ctx.fillStyle = '#3b82f6'; ctx.fillRect(p.x, p.y, p.width, 4); // Tech border line
+    });
+
+    // Draw Hazards
+    hazards.forEach(h => {
+        if (h.type === 'lava') ctx.fillStyle = '#f97316';
+        else if (h.type === 'acid') ctx.fillStyle = '#22c55e';
+        else ctx.fillStyle = '#ef4444'; // Spikes
+        
+        ctx.fillRect(h.x, h.y, h.width, h.height);
+
+        // Draw Spike Teeth highlights if type matches
+        if (h.type === 'spikes') {
+            ctx.fillStyle = '#ffffff';
+            for (let sx = h.x; sx < h.x + h.width; sx += 10) {
+                ctx.beginPath(); ctx.moveTo(sx, h.y + h.height); ctx.lineTo(sx + 5, h.y); ctx.lineTo(sx + 10, h.y + h.height); ctx.fill();
+            }
+        }
+    });
+
+    // Draw Coins Drops
+    lootCoins.forEach(c => {
+        ctx.fillStyle = '#eab308';
+        ctx.beginPath(); ctx.arc(c.x, c.y, 6, 0, Math.PI*2); ctx.fill();
+    });
+
+    // Draw All NPCs
+    npcs.forEach(n => {
+        if (n.type === 'civilian') {
+            ctx.strokeStyle = n.alive ? '#f43f5e' : '#475569';
+            ctx.lineWidth = 3;
+            let cx = n.x;
+            ctx.beginPath(); ctx.arc(cx, n.y+10, 6, 0, Math.PI*2); ctx.stroke(); // Head
+            ctx.beginPath(); ctx.moveTo(cx, n.y+16); ctx.lineTo(cx, n.y+32); ctx.stroke(); // Torso
+            if(!n.alive) {
+                ctx.fillStyle = '#ef4444'; ctx.font = '10px Arial'; ctx.fillText("☠️", cx-5, n.y-5);
+            }
+        } 
+        else if (n.type === 'cop') {
+            ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 4;
+            ctx.beginPath(); ctx.arc(n.x+10, n.y+10, 7, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(n.x+10, n.y+17); ctx.lineTo(n.x+10, n.y+35); ctx.stroke();
+            ctx.fillStyle = '#00ffff'; ctx.fillRect(n.x+8, n.y+22, 12, 5); // Police Gun arm asset
+            ctx.fillStyle = '#fff'; ctx.font = '9px Courier'; ctx.fillText("COP", n.x, n.y-5);
+        }
+    });
+
+    // Draw Enemies Matrix
+    enemies.forEach(e => {
+        if (e.type === 'minion') {
+            ctx.strokeStyle = '#a855f7'; ctx.lineWidth = 3.5;
+            ctx.beginPath(); ctx.arc(e.x+10, e.y+10, 7, 0, Math.PI*2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(e.x+10, e.y+17); ctx.lineTo(e.x+10, e.y+35); ctx.stroke();
+            ctx.lineTo(e.x+2, e.y+48); ctx.moveTo(e.x+10, e.y+35); ctx.lineTo(e.x+18, e.y+48); ctx.stroke();
+        } 
+        else if (e.type === 'boss') {
+            // Draw GIANT STICKMAN BOSS
+            ctx.strokeStyle = '#ef4444'; ctx.lineWidth = 5 * e.factor;
+            let bx = e.x + e.width/2;
+            ctx.beginPath(); ctx.arc(bx, e.y + (12 * e.factor), 11 * e.factor, 0, Math.PI*2); ctx.stroke(); // Giant Head
+            ctx.beginPath(); ctx.moveTo(bx, e.y + (23 * e.factor)); ctx.lineTo(bx, e.y + (50 * e.factor)); ctx.stroke(); // Spine
+            ctx.lineTo(e.x, e.y + e.height); ctx.moveTo(bx, e.y + (50 * e.factor)); ctx.lineTo(e.x + e.width, e.y + e.height); ctx.stroke(); // Giant Legs
+            
+            // Health overlay bar HUD
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(e.x - 20, e.y - 20, e.width + 40, 8);
+            ctx.fillStyle = '#ff0055'; ctx.fillRect(e.x - 20, e.y - 20, (e.width + 40) * (e.health / e.maxHealth), 8);
+        }
+    });
+
+    // Draw Projectiles
+    bullets.forEach(b => {
+        ctx.fillStyle = b.byPlayer ? '#5cdb95' : '#00ffff';
+        ctx.fillRect(b.x, b.y, 8, 4);
+    });
+
+    // --- DRAW HERO STICKMAN WITH APPAREL COSMETICS ---
+    ctx.strokeStyle = config.color; ctx.lineWidth = 4;
+    let px = player.x + player.width / 2;
+    ctx.beginPath(); ctx.arc(px, player.y + 10, 7, 0, Math.PI * 2); ctx.stroke(); // Head
+    ctx.beginPath(); ctx.moveTo(px, player.y + 17); ctx.lineTo(px, player.y + 35); ctx.stroke(); // Body
+    
+    // Animate running legs
+    let legCycle = Math.sin(gameTime * 0.35) * 12;
+    if (Math.abs(player.vx) < 0.2) legCycle = 0;
+    ctx.beginPath(); ctx.moveTo(px, player.y + 35); ctx.lineTo(px - 9 + legCycle, player.y + 50);
+    ctx.moveTo(px, player.y + 35); ctx.lineTo(px + 9 - legCycle, player.y + 50); ctx.stroke();
+
+    // Draw custom scarf if equipped
+    if (config.scarf !== 'none') {
+        ctx.fillStyle = config.scarf === 'red' ? '#ef4444' : '#22c55e';
+        ctx.fillRect(px - 6, player.y + 15, 12, 4); // Knot
+        // Tail blowing backward
+        let tailDir = player.facing === 'right' ? -10 : 6;
+        ctx.fillRect(px + (player.facing === 'right' ? -6 : 0), player.y + 17, tailDir, 12);
+    }
+
+    // Draw custom masks overlays
+    if (config.mask === 'ninja') {
+        ctx.fillStyle = '#111827'; ctx.fillRect(px - 5, player.y + 8, 10, 5);
+    } else if (config.mask === 'visor') {
+        ctx.fillStyle = '#00ffff'; ctx.fillRect(px - (player.facing === 'right' ? 2 : 6), player.y + 6, 8, 3);
+    }
+
+    // Gun overlay representation
+    if (player.weapon !== 'Fists') {
+        ctx.fillStyle = '#64748b';
+        let gx = player.facing === 'right' ? px + 4 : px - 18;
+        ctx.fillRect(gx, player.y + 22, 14, 6);
+    }
+
+    ctx.restore();
+
+    // --- CONSTANT STATIC HUD FRAME PANEL ---
+    ctx.fillStyle = '#1e293b'; ctx.fillRect(20, 45, 180, 16);
+    ctx.fillStyle = player.health > 25 ? '#22c55e' : '#ef4444';
+    ctx.fillRect(20, 45, 180 * (player.health / player.maxHealth), 16);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 11px Courier';
+    ctx.fillText(`HEALTH: ${Math.max(0, Math.floor(player.health))}%`, 25, 57);
+    ctx.fillText(`COINS: ${globalCoins} 🪙`, 210, 57);
+    ctx.fillText(`WEAPON: ${player.weapon} [x${player.ammo}]`, 340, 57);
+
+    // Lose Terminal Menu State
+    if (player.health <= 0) {
+        ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ef4444'; ctx.font = 'bold 36px Courier'; ctx.fillText("WASTED IN BATTLE", 240, 200);
+        ctx.fillStyle = '#fff'; ctx.font = '14px Courier'; ctx.fillText("Press 'R' to Respawn at Headquarters!", 240, 240);
+    }
+}
+
+function resetGame() {
+    player.health = 100; player.weapon = 'Fists'; player.ammo = 0;
+    openScreen('main-menu');
+}
+
+// Global engine run sequence loop
+function run() {
+    update();
+    draw();
+    requestAnimationFrame(run);
+}
+run();
+</script>
+
+</body>
+</html>
